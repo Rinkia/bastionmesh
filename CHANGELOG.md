@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-09-30)
 
 First release: a runtime security gateway between A2A agents (backlog item E2 of the bastion
 L5 plan).
