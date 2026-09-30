@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bastionmesh"
+version = "0.1.0"
+description = "Runtime security gateway between A2A agents: scans peer replies for prompt injection, catches injected payloads relayed between agents, pins and rewrites agent cards, and caps delegation depth, cycles and fan-out."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Stefano Rizzello", email = "rizzellostefano@gmail.com" }]
+keywords = ["a2a", "agent2agent", "multi-agent", "security", "gateway", "proxy", "prompt-injection", "ai-agent", "agent-security"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+# supply: card checks + lockfile (uncapped check list is 0.10-specific, hence <0.11)
+# gateway: pii scrub, result scanner, Trace
+dependencies = ["bastionsupply>=0.10,<0.11", "bastiongateway>=0.9", "pyyaml>=6.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "bastiontrace>=0.5", "a2a-sdk[http-server]>=1.2", "uvicorn>=0.30"]
+
+[project.scripts]
+bastionmesh = "bastionmesh.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Rinkia/bastionmesh"
+Repository = "https://github.com/Rinkia/bastionmesh"
+Issues = "https://github.com/Rinkia/bastionmesh/issues"
+
+[tool.setuptools]
+packages = ["bastionmesh"]
+

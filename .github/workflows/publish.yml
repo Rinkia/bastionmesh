@@ -1,0 +1,40 @@
+name: Publish to PyPI
+
+# Publishes on a GitHub Release. Uses PyPI Trusted Publishing (OIDC) - no API
+# token stored. One-time setup on PyPI: create the `bastionmesh` project's
+# trusted publisher pointing at this repo + workflow (publish.yml) + environment
+# `pypi`. https://docs.pypi.org/trusted-publishers/
+# Dependencies (bastionsupply, bastiongateway) are already on PyPI.
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+      - uses: actions/upload-artifact@v5
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write        # required for OIDC trusted publishing
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

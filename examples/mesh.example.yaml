@@ -1,0 +1,32 @@
+# bastionmesh policy. Agents call http://127.0.0.1:9100/peers/<peer>/ and discover
+# peers at http://127.0.0.1:9100/peers/<peer>/.well-known/agent-card.json
+policy_version: 1
+listen: 127.0.0.1:9100
+public_url: http://127.0.0.1:9100   # what rewritten agent cards point at
+
+peers:
+  researcher:
+    url: https://researcher.example/a2a       # the peer's A2A JSON-RPC endpoint
+    card: lock                                # pin | lock | off
+    lock: researcher.lock.json                # written by `bastionmesh check --lock`
+  mailer:
+    url: http://mailer.internal:8000/
+    methods: [send, stream, get, cancel, subscribe, push-set]
+    push_webhooks: [https://hooks.corp.example/a2a]   # the only place task data may be POSTed
+
+callers:                                      # omit entirely for open mode (loopback only)
+  orchestrator: {key_env: MESH_KEY_ORCHESTRATOR, peers: [researcher, mailer]}
+  researcher:   {key_env: MESH_KEY_RESEARCHER, peers: [mailer]}
+
+limits:
+  max_depth: 4
+  max_inflight_per_caller: 16
+  max_requests_per_minute: 120
+  max_message_chars: 1000000   # more text than this in one message is refused
+
+actions:                 # detectors ship in warn (shadow); flip to block once your logs are quiet
+  on_injection: warn
+  on_relay: warn
+  on_card_findings: warn
+  on_card_drift: block
+  on_secret_out: redact

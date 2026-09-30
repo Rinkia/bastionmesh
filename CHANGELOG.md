@@ -1,0 +1,36 @@
+# Changelog
+
+## 0.1.0 (unreleased)
+
+First release: a runtime security gateway between A2A agents (backlog item E2 of the bastion
+L5 plan).
+
+- HTTP reverse proxy fronting N peers: `/peers/<peer>/` (JSON-RPC) and
+  `/peers/<peer>/.well-known/agent-card.json`. A2A v1.0 and v0.3 method names and part shapes.
+- Caller keys (`X-Bastionmesh-Key`, from env vars), caller -> peer allow lists, per-peer method
+  allow lists; open mode (no callers) only on loopback. Strict policy loader.
+- Response scanning with the bastiongate result scanner across messages, task status, artifacts,
+  history and stream events; per-artifact 256-char carry for split stream chunks.
+- Request scanning limited to hidden unicode and bastioncorpus payloads (delegations are
+  instructions by design), plus relay detection (32-char shingles + matched phrases of flagged
+  replies) and credential redaction.
+- Delegation depth and cycle detection from in-flight request chains; per-caller rate and
+  in-flight caps; push-notification webhook allow list (exact scheme/host/port, path on a
+  segment boundary, no userinfo).
+- Agent cards: fetched with bastionsupply (bounded, no redirects), scanned at real severity,
+  pinned (`pin` in memory, `lock` from a bastionsupply lock file), rewritten to the mesh
+  (non-JSON-RPC interfaces and signatures dropped). `bastionmesh check [--lock]`.
+- `--log` (event log without message content), `--trace-content` (bastiontrace v3 trace),
+  metrics endpoint, `bastionmesh demo`.
+- Detectors ship in warn (shadow). Promotion bar for a `block` default: 20+ real multi-agent
+  sessions with 0 false blocks, recorded here.
+- Security review fixes before release: whole-message and joined-part scanning (no truncation,
+  overflow parts merged), lone-CR SSE framing, bounded stream reads, non-canonical key and
+  deep-nesting refusal (`malformed`), card route honours caller allow lists, atomic chain
+  registration, self-call is a cycle, credentials redacted anywhere in params (push-notification webhook tokens exempt),
+  `limits.max_message_chars` (oversize fails closed), casefolded key checks, stream carry
+  for status text and up to 4096 interleaved artifacts, unauthenticated bodies never read,
+  echoed caller text in task history not re-scanned with the reply signatures.
+- Interop tests against the official a2a-sdk 1.2 server and client (send, stream, v0.3 compat).
+
+Next: see TODOS.md.
