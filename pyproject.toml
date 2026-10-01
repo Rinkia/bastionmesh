@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bastionmesh"
-version = "0.1.0"
+version = "0.2.0"
 description = "Runtime security gateway between A2A agents: scans peer replies for prompt injection, catches injected payloads relayed between agents, pins and rewrites agent cards, and caps delegation depth, cycles and fan-out."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -18,9 +18,10 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Security",
 ]
-# supply: card checks + lockfile (uncapped check list is 0.10-specific, hence <0.11)
+# supply: card checks + lockfile (uncapped check list is version-specific: bump this pin
+# in the same window as every bastionsupply minor release)
 # gateway: pii scrub, result scanner, Trace
-dependencies = ["bastionsupply>=0.10,<0.11", "bastiongateway>=0.9", "pyyaml>=6.0"]
+dependencies = ["bastionsupply>=0.11,<0.12", "bastiongateway>=0.10", "bastioncorpus>=0.5", "pyyaml>=6.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "bastiontrace>=0.5", "a2a-sdk[http-server]>=1.2", "uvicorn>=0.30"]

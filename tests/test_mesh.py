@@ -376,7 +376,7 @@ def test_perf_10k_requests():
     for i in range(10_000):
         call, err = m.open_call("orch", "researcher", send(text, mid=i))
         m.close_call(call)
-    assert time.perf_counter() - start < 10  # ~2 s locally; headroom for slow CI
+    assert time.perf_counter() - start < 25  # ~1.2 ms/request locally (0.85 ms is decoding); CI headroom
 
 
 SECRET_SAMPLES = {

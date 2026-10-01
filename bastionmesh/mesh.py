@@ -36,7 +36,8 @@ from dataclasses import dataclass, field
 
 from bastiongate import pii
 from bastiongate.flows import SECRET_KINDS
-from bastiongate.guards import scan_result_text
+from bastioncorpus import variants
+from bastiongate.guards import scan_encoded_text, scan_result_text
 from bastionsupply.checks import check_hidden_unicode
 from bastionsupply.corpus import poison_signatures
 from bastionsupply.models import Server, Tool
@@ -90,6 +91,10 @@ def request_scan(text: str) -> str | None:
     low = fold(text)
     if any(phrase in low for _cat, phrase in poison_signatures()):
         return "a known prompt-injection payload (bastioncorpus)"
+    for d in variants(text):  # the same known payloads, hidden in base64/hex/binary/...
+        low = fold(d.text)
+        if any(phrase in low for _cat, phrase in poison_signatures()):
+            return f"a known prompt-injection payload hidden in {d.encoding} encoding"
     return None
 
 
@@ -97,7 +102,12 @@ def response_scan(text: str) -> tuple[str | None, list[str]]:
     """(reason or None, matched poisoning spans) with the full signature set."""
     decision = scan_result_text(text)
     if decision.allowed:
-        return None, []
+        decision = scan_encoded_text(text)  # base64/hex/binary/... decoded, same signatures
+        if decision.allowed:
+            return None, []
+        views = [d.text for d in variants(text)]
+        spans = [m.group(0) for v in views for rx in _POISON_RX if (m := rx.search(v))]
+        return decision.reason.removeprefix("tool result "), spans
     spans = [m.group(0) for rx in _POISON_RX if (m := rx.search(text))]
     return decision.reason.removeprefix("tool result "), spans  # gate words it for MCP
 
@@ -130,6 +140,8 @@ class RelayStore:
         now = self._clock()
         entry = (origin, seq, now)
         hashes = self._shingles(fold(self._window(text)), MAX_SHINGLES_PER_TEXT)
+        for d in variants(text):  # an agent that relays the DECODED payload is caught too
+            hashes += self._shingles(fold(self._window(d.text)), MAX_SHINGLES_PER_TEXT)
         with self._lock:
             for h in hashes:
                 self._hashes[h] = entry
@@ -155,10 +167,10 @@ class RelayStore:
         for s, (origin, seq, _ts) in snippets:
             if s in folded:
                 return origin, seq
-        window = fold(self._window(text))
-        if len(window) < SHINGLE:
+        windows = [fold(self._window(t)) for t in [text] + [d.text for d in variants(text)]]
+        hashes = [h for w in windows if len(w) >= SHINGLE for h in self._shingles(w, None)]
+        if not hashes:
             return None
-        hashes = self._shingles(window, None)
         with self._lock:
             for h in hashes:
                 hit = self._hashes.get(h)
