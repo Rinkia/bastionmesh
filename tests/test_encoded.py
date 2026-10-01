@@ -94,3 +94,32 @@ def test_clean_encoded_reply_passes():
     call, _ = m.open_call("ip:1", "a", send("Summarise."))
     ok = reply(f"Attachment: {b64('Quarterly sales grew 12 percent in the north region.')}")
     assert m.inspect_response(call, ok) == ok
+
+
+# --- integration review regressions ---------------------------------------------
+def test_one_flagged_reply_cannot_flush_the_relay_store():
+    from bastionmesh import mesh as mesh_mod
+    from bastionmesh.mesh import RelayStore
+
+    store = RelayStore()
+    victim = INJ
+    store.add(victim, origin="x", seq=None)
+    many = " ".join(b64(f"chunk {i} " + "filler text " * 600) for i in range(80))
+    store.add(many, origin="y", seq=None)
+    assert len(store._hashes) <= mesh_mod.MAX_SHINGLES_PER_TEXT * 2 + 100
+    assert store.match(victim) is not None
+
+
+def test_each_piece_is_decoded_once(monkeypatch):
+    from bastionmesh import mesh as mesh_mod
+
+    calls = []
+    real = mesh_mod.decoded_views
+    monkeypatch.setattr(mesh_mod, "decoded_views", lambda t: calls.append(len(t)) or real(t))
+    m = make(on_injection="warn")
+    call, _ = m.open_call("ip:1", "a", send("Summarise."))
+    m.inspect_response(call, reply(f"Done. Attachment: {b64(INJ)}"))
+    m.close_call(call)
+    calls.clear()
+    m.open_call("ip:1", "b", send(f"Forward: {b64('a harmless note about quarterly sales figures')}"))
+    assert len(calls) == 1  # request_scan, relay match share one decode
