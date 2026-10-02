@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 
 from bastiongate import pii
 from bastiongate.flows import SECRET_KINDS
-from bastiongate.guards import scan_encoded_text, scan_result_text
+from bastiongate.guards import TRANSFORM_MAX_CHARS, scan_encoded_text, scan_result_text
 from bastionsupply.checks import decoded_views
 from bastionsupply.checks import check_hidden_unicode
 from bastionsupply.corpus import poison_signatures
@@ -96,6 +96,17 @@ def request_scan(text: str, views=None) -> str | None:
         if any(phrase in low for _cat, phrase in poison_signatures()):
             return f"a known prompt-injection payload hidden in {d.encoding} encoding"
     return None
+
+
+_TRANSFORMS = frozenset({"rot13", "reversed", "leet", "spaced"})
+
+
+def reply_views(text: str, transforms: bool) -> tuple[list, list]:
+    """(run-based views, all views to scan). One decode; with `transforms` (replies up to
+    TRANSFORM_MAX_CHARS) the scan also sees the whole-text rewrites, while the relay
+    store keeps run-based views only (its hash budget is split across views)."""
+    views = decoded_views(text, transforms=transforms and len(text) <= TRANSFORM_MAX_CHARS)
+    return [d for d in views if d.encoding not in _TRANSFORMS], views
 
 
 def response_scan(text: str, views=None) -> tuple[str | None, list[str]]:
@@ -485,8 +496,8 @@ class Mesh:
                     call.carry.pop(next(iter(call.carry)))
             if not last_joined:
                 texts.append(piece.text)
-            views = decoded_views(text)
-            why, spans = response_scan(text, views)
+            views, scan_views = reply_views(text, self.policy.decode_transforms)
+            why, spans = response_scan(text, scan_views)
             if why and not (last_joined and flagged_here):
                 flagged_here = True
                 call.flagged = True

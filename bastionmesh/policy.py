@@ -31,6 +31,8 @@ _ACTIONS = {
     "on_card_drift": ((WARN, BLOCK), BLOCK),
     "on_card_findings": ((WARN, BLOCK), WARN),
     "on_secret_out": ((REDACT, BLOCK, WARN), REDACT),
+    # opt-in: also scan replies' rot13 / leet / reversed / spaced views (replies <= 64 KB)
+    "decode_transforms": ((False, True), False),
 }
 _LIMITS = {"max_depth": 4, "max_inflight_per_caller": 16, "max_requests_per_minute": 120,
            "max_message_chars": 1_000_000}
@@ -74,6 +76,7 @@ class MeshPolicy:
     max_message_chars: int = 1_000_000  # text per message; above it: refused, never truncated
     on_injection: str = WARN
     on_relay: str = WARN
+    decode_transforms: bool = False
     on_card_drift: str = BLOCK
     on_card_findings: str = WARN
     on_secret_out: str = REDACT
@@ -121,8 +124,8 @@ def from_dict(obj, env=None, base: Path | None = None) -> MeshPolicy:
             raise PolicyError(f"`limits.{k}` must be a positive integer, got {v!r}")
     for k, v in actions.items():
         choices = _ACTIONS[k][0]
-        if v not in choices:
-            raise PolicyError(f"`actions.{k}`: {v!r} is not one of {' | '.join(choices)}")
+        if v not in choices or isinstance(v, bool) != isinstance(choices[0], bool):  # 1 == True
+            raise PolicyError(f"`actions.{k}`: {v!r} is not one of {' | '.join(str(c).lower() for c in choices)}")
 
     policy = MeshPolicy(peers=peers, callers=callers, host=host, port=port,
                         public_url=public_url.rstrip("/"), **limits, **actions)

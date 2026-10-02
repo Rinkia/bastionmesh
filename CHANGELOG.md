@@ -12,6 +12,9 @@
   - **Relays:** fingerprints cover decoded text too, so an agent that forwards the decoded
     payload is caught.
   - **Agent cards:** findings include `encoded-injection`.
+- **`actions.decode_transforms: true`** (opt-in) also scans replies' rot13 / leet / reversed /
+  spaced-letter views (replies up to 64 KB). Requests never get them: delegations are
+  instructions. Evidence: `bastionprobe encoding-bench --defenders supply,supply+transforms` (2026-10-02): rot13 1% -> 88%, leet 1% -> 76%, reversed 1% -> 88%, spaced letters 1% -> 8%, 0% benign FP; and 0 false positives on 45,025 real Markdown paragraphs (skills and memory notes).
   - All of it acts under the existing `on_injection` / `on_relay` settings, which default to
     warn.
 - Streamed replies: a base64 payload split across chunks is caught by the existing chunk
