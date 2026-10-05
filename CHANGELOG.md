@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.0 (2026-10-05)
+
+- **Encoded payloads.** Text is decoded with bastioncorpus's `variants`: base64, base32, hex,
+  binary, ascii85/base85, Morse, percent and `\u` escapes, including line-wrapped and chained
+  forms.
+  - **Replies:** the decoded views get the full signature set, through bastionsupply's
+    `encoded-injection` check.
+  - **Requests:** the decoded views get the known-payload (bastioncorpus) check only, since
+    delegations are instructions by design.
+  - **Relays:** fingerprints cover decoded text too, so an agent that forwards the decoded
+    payload is caught.
+  - **Agent cards:** findings include `encoded-injection`.
+- **`actions.decode_transforms: true`** (opt-in) also scans replies' rot13 / leet / reversed /
+  spaced-letter views (replies up to 64 KB). Requests never get them: delegations are
+  instructions. Evidence: `bastionprobe encoding-bench --defenders supply,supply+transforms` (2026-10-02): rot13 1% -> 88%, leet 1% -> 76%, reversed 1% -> 88%, spaced letters 1% -> 8%, 0% benign FP; and 0 false positives on 45,025 real Markdown paragraphs (skills and memory notes).
+  - All of it acts under the existing `on_injection` / `on_relay` settings, which default to
+    warn.
+- Streamed replies: a base64 payload split across chunks is caught by the existing chunk
+  carry.
+- **Dependency pins:** `bastionsupply>=0.11,<0.12` (bump in the same window as every supply
+  minor), `bastiongateway>=0.13` (0.10-0.12 were never published), `bastioncorpus>=0.5`.
+- Cost: about 1.2 ms per 4 KB message, of which decoding is about 0.85 ms.
+
 ## 0.1.0 (2026-09-30)
 
 First release: a runtime security gateway between A2A agents (backlog item E2 of the bastion

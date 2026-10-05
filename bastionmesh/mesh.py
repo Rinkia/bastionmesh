@@ -36,7 +36,8 @@ from dataclasses import dataclass, field
 
 from bastiongate import pii
 from bastiongate.flows import SECRET_KINDS
-from bastiongate.guards import scan_result_text
+from bastiongate.guards import TRANSFORM_MAX_CHARS, scan_encoded_text, scan_result_text
+from bastionsupply.checks import decoded_views
 from bastionsupply.checks import check_hidden_unicode
 from bastionsupply.corpus import poison_signatures
 from bastionsupply.models import Server, Tool
@@ -81,7 +82,7 @@ def _hash(s: str) -> int:
     return hash(s)  # in-memory only, so the per-process salt is fine (and fast)
 
 
-def request_scan(text: str) -> str | None:
+def request_scan(text: str, views=None) -> str | None:
     """Delegation-safe checks: hidden unicode, known payloads. Returns a reason or None."""
     # ASCII without control characters cannot hide anything: skip the per-char walk
     suspicious = not text.isascii() or _ASCII_CONTROL.search(text)
@@ -90,14 +91,34 @@ def request_scan(text: str) -> str | None:
     low = fold(text)
     if any(phrase in low for _cat, phrase in poison_signatures()):
         return "a known prompt-injection payload (bastioncorpus)"
+    for d in (decoded_views(text) if views is None else views):  # known payloads, hidden in base64/hex/...
+        low = fold(d.text)
+        if any(phrase in low for _cat, phrase in poison_signatures()):
+            return f"a known prompt-injection payload hidden in {d.encoding} encoding"
     return None
 
 
-def response_scan(text: str) -> tuple[str | None, list[str]]:
+_TRANSFORMS = frozenset({"rot13", "reversed", "leet", "spaced"})
+
+
+def reply_views(text: str, transforms: bool) -> tuple[list, list]:
+    """(run-based views, all views to scan). One decode; with `transforms` (replies up to
+    TRANSFORM_MAX_CHARS) the scan also sees the whole-text rewrites, while the relay
+    store keeps run-based views only (its hash budget is split across views)."""
+    views = decoded_views(text, transforms=transforms and len(text) <= TRANSFORM_MAX_CHARS)
+    return [d for d in views if d.encoding not in _TRANSFORMS], views
+
+
+def response_scan(text: str, views=None) -> tuple[str | None, list[str]]:
     """(reason or None, matched poisoning spans) with the full signature set."""
     decision = scan_result_text(text)
     if decision.allowed:
-        return None, []
+        views = decoded_views(text) if views is None else views  # decoded once, reused
+        decision = scan_encoded_text(text, views)  # base64/hex/binary/... decoded, same signatures
+        if decision.allowed:
+            return None, []
+        spans = [m.group(0) for d in views for rx in _POISON_RX if (m := rx.search(d.text))]
+        return decision.reason.removeprefix("tool result "), spans
     spans = [m.group(0) for rx in _POISON_RX if (m := rx.search(text))]
     return decision.reason.removeprefix("tool result "), spans  # gate words it for MCP
 
@@ -126,10 +147,14 @@ class RelayStore:
             return text
         return text[:RELAY_WINDOW] + " " + text[-RELAY_WINDOW:]
 
-    def add(self, text: str, origin: str, seq: int | None, spans=()) -> None:
+    def add(self, text: str, origin: str, seq: int | None, spans=(), views=None) -> None:
         now = self._clock()
         entry = (origin, seq, now)
-        hashes = self._shingles(fold(self._window(text)), MAX_SHINGLES_PER_TEXT)
+        texts = [text] + [d.text for d in (decoded_views(text) if views is None else views)]
+        # one add() never inserts more than ~MAX_SHINGLES_PER_TEXT hashes in total (the
+        # decoded views share the budget), so a single big reply cannot flush the store
+        each = max(1, MAX_SHINGLES_PER_TEXT // len(texts))
+        hashes = [h for t in texts for h in self._shingles(fold(self._window(t)), each)]
         with self._lock:
             for h in hashes:
                 self._hashes[h] = entry
@@ -144,7 +169,7 @@ class RelayStore:
             while len(self._snippets) > MAX_SNIPPETS:
                 self._snippets.popitem(last=False)
 
-    def match(self, text: str) -> tuple[str, int | None] | None:
+    def match(self, text: str, views=None) -> tuple[str, int | None] | None:
         """(origin, origin seq) of the flagged text this one copies, else None."""
         if not self._hashes and not self._snippets:
             return None
@@ -155,10 +180,11 @@ class RelayStore:
         for s, (origin, seq, _ts) in snippets:
             if s in folded:
                 return origin, seq
-        window = fold(self._window(text))
-        if len(window) < SHINGLE:
+        decoded = decoded_views(text) if views is None else views
+        windows = [fold(self._window(t)) for t in [text] + [d.text for d in decoded]]
+        hashes = [h for w in windows if len(w) >= SHINGLE for h in self._shingles(w, None)]
+        if not hashes:
             return None
-        hashes = self._shingles(window, None)
         with self._lock:
             for h in hashes:
                 hit = self._hashes.get(h)
@@ -388,15 +414,16 @@ class Mesh:
         relay_origin = None
         for i, piece in enumerate(pieces):
             last_joined = joined and i == len(pieces) - 1
-            why = request_scan(piece.text)
+            views = decoded_views(piece.text)  # decoded once per piece: scan, add and match share it
+            why = request_scan(piece.text, views)
             if why and not (last_joined and call.flagged):
                 call.flagged = True
-                self.relays.add(piece.text, origin=call.caller, seq=None)
+                self.relays.add(piece.text, origin=call.caller, seq=None, views=views)
                 reply = self._flag(self.policy.on_injection, "injection",
                                    f"message to peer {call.peer} carries {why}", mid, direction="request", **where)
                 if reply:
                     return reply
-            hit = None if (last_joined and relay_origin) else self.relays.match(piece.text)
+            hit = None if (last_joined and relay_origin) else self.relays.match(piece.text, views)
             if hit and hit[0] != call.caller:  # passing on someone else's flagged text
                 relay_origin = hit
                 reply = self._flag(self.policy.on_relay, "relay",
@@ -469,13 +496,14 @@ class Mesh:
                     call.carry.pop(next(iter(call.carry)))
             if not last_joined:
                 texts.append(piece.text)
-            why, spans = response_scan(text)
+            views, scan_views = reply_views(text, self.policy.decode_transforms)
+            why, spans = response_scan(text, scan_views)
             if why and not (last_joined and flagged_here):
                 flagged_here = True
                 call.flagged = True
                 seq = self._record_reply(call, texts)
                 texts = []
-                self.relays.add(text, origin=call.peer, seq=seq, spans=spans)
+                self.relays.add(text, origin=call.peer, seq=seq, spans=spans, views=views)
                 reply = self._flag(self.policy.on_injection, "injection",
                                    f"reply from peer {call.peer} {why}", msg.get("id"), direction="response",
                                    **where)

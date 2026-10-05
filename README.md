@@ -114,6 +114,10 @@ whole and delegation depth cannot be attributed. Use caller keys when that matte
 - **Credentials only.** Outbound redaction targets keys and tokens, not emails or phone numbers
   (delegations carry those routinely). A part that holds a credential is redacted as a whole
   PII pass, so an email next to a key is redacted too.
+- **Encoded text** (base64, hex, binary, base32, ascii85/base85, Morse, escapes) is decoded
+  and scanned. rot13, leetspeak and reversed text are scanned in replies only with
+  `actions.decode_transforms: true` (off by default, replies up to 64 KB), never in requests.
+  Made-up ciphers are never decodable.
 - **Binary parts** (`raw`, file bytes) are counted in the log, not scanned.
 - **JSON-RPC binding only.** REST and gRPC interfaces are removed from rewritten cards so callers
   cannot route around the mesh; JWS card signatures are dropped for the same reason (the mesh is

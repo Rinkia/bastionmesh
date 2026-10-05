@@ -18,6 +18,12 @@ Publishing is automatic: pushing a **GitHub Release** tag triggers the OIDC publ
 
 - [ ] On PyPI, add a *pending* trusted publisher for project `bastionmesh`: repo Rinkia/bastionmesh, workflow `publish.yml`, environment `pypi`. Without it the first publish fails.
 
+## Dependency pins
+
+- [ ] bastionmesh pins `bastionsupply>=X.Y,<X.(Y+1)` because it uses supply's check list
+  directly. When bastionsupply ships a new minor, widen the pin, run CI against it, and
+  release mesh in the same window, or mesh users cannot upgrade supply.
+
 ## A2A spec drift
 
 - [ ] Re-check `bastionmesh/a2a.py` method names and part shapes against the current A2A spec and the latest a2a-sdk; the interop tests run against the installed a2a-sdk.
