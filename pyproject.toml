@@ -21,7 +21,7 @@ classifiers = [
 # supply: card checks + lockfile (uncapped check list is version-specific: bump this pin
 # in the same window as every bastionsupply minor release)
 # gateway: pii scrub, result scanner, Trace
-dependencies = ["bastionsupply>=0.11,<0.12", "bastiongateway>=0.10", "bastioncorpus>=0.5", "pyyaml>=6.0"]
+dependencies = ["bastionsupply>=0.11,<0.12", "bastiongateway>=0.13", "bastioncorpus>=0.5", "pyyaml>=6.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "bastiontrace>=0.5", "a2a-sdk[http-server]>=1.2", "uvicorn>=0.30"]

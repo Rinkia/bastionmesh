@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-10-05)
 
 - **Encoded payloads.** Text is decoded with bastioncorpus's `variants`: base64, base32, hex,
   binary, ascii85/base85, Morse, percent and `\u` escapes, including line-wrapped and chained
@@ -20,7 +20,7 @@
 - Streamed replies: a base64 payload split across chunks is caught by the existing chunk
   carry.
 - **Dependency pins:** `bastionsupply>=0.11,<0.12` (bump in the same window as every supply
-  minor), `bastiongateway>=0.10`, `bastioncorpus>=0.5`.
+  minor), `bastiongateway>=0.13` (0.10-0.12 were never published), `bastioncorpus>=0.5`.
 - Cost: about 1.2 ms per 4 KB message, of which decoding is about 0.85 ms.
 
 ## 0.1.0 (2026-09-30)
